@@ -254,7 +254,14 @@ if (dlBtn) dlBtn.addEventListener('click', () => {
 });
 
 video.addEventListener('play', () => {
+  // Prevent duplicate canvases
   if (videoWrapper.querySelector('canvas')) return;
+
+  // KEY FIX: Wait for video dimensions to be ready
+  if (video.readyState < 2 || video.videoWidth === 0) {
+    setTimeout(() => video.dispatchEvent(new Event('play')), 100);
+    return;
+  }
 
   const canvas = faceapi.createCanvasFromMedia(video);
   videoWrapper.append(canvas);
