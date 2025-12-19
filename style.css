@@ -198,3 +198,8 @@ canvas {
 .loading-overlay.hidden {
     display: none;
 }
+
+/* Generic Hidden Utility */
+.hidden {
+    display: none !important;
+}

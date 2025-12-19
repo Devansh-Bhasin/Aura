@@ -266,8 +266,10 @@ video.addEventListener('play', () => {
   const canvas = faceapi.createCanvasFromMedia(video);
   videoWrapper.append(canvas);
 
-  const displaySize = { width: video.width, height: video.height };
-  faceapi.matchDimensions(canvas, displaySize);
+  // Initial setup (might be 0x0, fixed in loop)
+  const displaySize = { width: video.videoWidth, height: video.videoHeight };
+  if (video.videoWidth > 0) faceapi.matchDimensions(canvas, displaySize);
+
   loadingOverlay.classList.add('hidden');
 
   let isDetecting = false;
@@ -276,6 +278,18 @@ video.addEventListener('play', () => {
     if (video.paused || video.ended || isPaused) {
       if (isPaused) isLoopRunning = false;
       return;
+    }
+
+    // SAFETY CHECK: dimensions
+    if (video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1) {
+      requestAnimationFrame(detect);
+      return;
+    }
+
+    // Ensure canvas matches video (dynamic resizing fix)
+    const currentSize = { width: video.videoWidth, height: video.videoHeight };
+    if (canvas.width !== currentSize.width || canvas.height !== currentSize.height) {
+      faceapi.matchDimensions(canvas, currentSize);
     }
 
     requestAnimationFrame(detect);
@@ -297,7 +311,7 @@ video.addEventListener('play', () => {
         .withFaceExpressions()
         .withAgeAndGender();
 
-      const resizedDetections = faceapi.resizeResults(detections, displaySize);
+      const resizedDetections = faceapi.resizeResults(detections, currentSize); // Use currentSize!
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height); // ALWAYS clear first
 
