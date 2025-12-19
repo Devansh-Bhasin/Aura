@@ -86,8 +86,7 @@ const funAudioFiles = [
   'audio/padhaai.mp3',
   'audio/khatam_goodbye.mp3'
 ];
-const funAudios = []; // Preloaded audio objects
-
+const funAudios = [];
 // Preload Audio
 funAudioFiles.forEach(src => {
   const audio = new Audio(src);
@@ -96,12 +95,20 @@ funAudioFiles.forEach(src => {
   funAudios.push(audio);
 });
 
+let currentAudio = null;
+let lastPlayedIndex = -1;
+
 // Fun Mode Toggle
 const funModeToggle = document.getElementById('fun-mode-toggle');
 if (funModeToggle) {
   funModeToggle.addEventListener('change', (e) => {
     isFunMode = e.target.checked;
     console.log("Fun Mode Toggled:", isFunMode);
+    // Stop audio if toggled off
+    if (!isFunMode && currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
   });
 }
 
@@ -113,7 +120,7 @@ function playBeep() {
   const gainNode = audioCtx.createGain();
 
   oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+  oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
   oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
 
   gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
@@ -129,14 +136,28 @@ function playBeep() {
 function handleAudioFeedback(outcome) {
   if (outcome === 'sleepy') {
     const now = Date.now();
+
+    // 1. OVERLAP CHECK
+    if (currentAudio && !currentAudio.paused) {
+      return; // Don't interrupt fun audio
+    }
+
     if (now - lastSpeechTime < SPEECH_COOLDOWN) return;
     lastSpeechTime = now;
 
     console.log("Triggering Audio. Fun Mode:", isFunMode);
 
     if (isFunMode) {
-      // Play Random Fun Audio
-      const randomAudio = funAudios[Math.floor(Math.random() * funAudios.length)];
+      // 2. SMART RANDOMIZATION (No Repeats)
+      let index;
+      do {
+        index = Math.floor(Math.random() * funAudios.length);
+      } while (index === lastPlayedIndex && funAudios.length > 1);
+
+      lastPlayedIndex = index;
+      const randomAudio = funAudios[index];
+      currentAudio = randomAudio;
+
       randomAudio.currentTime = 0;
       console.log("Playing:", randomAudio.src);
       randomAudio.play().catch(e => console.error("Audio play failed:", e));
