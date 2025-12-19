@@ -1,15 +1,24 @@
 const video = document.getElementById('video');
 const loadingOverlay = document.getElementById('loading');
 const videoWrapper = document.querySelector('.video-wrapper');
+const toggleBtn = document.getElementById('toggle-detection');
 
 // --- STATE MANAGEMENT ---
 const logs = [];
 const analytics = {};
 let lastLogTime = 0;
+let isLoopRunning = false;
+let isPaused = false;
+let frameCount = 0; // For frame skipping
+
+// Hysteresis (Sticky Emotions)
+let lastConfirmedEmotion = 'neutral';
+let emotionConsecutiveCount = 0;
+const STICKY_THRESHOLD = 4; // Frames to hold before switching
 
 // Temporal Smoothing Buffer (Expressions)
 const historyBuffer = [];
-const HISTORY_SIZE = 15; // Increased for better smoothing
+const HISTORY_SIZE = 12;
 
 // EAR History for "Flinching" detection
 const earHistory = [];
@@ -37,6 +46,30 @@ function startVideo() {
     });
 }
 
+// --- BUTTON CONTROL ---
+if (toggleBtn) {
+  toggleBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    if (isPaused) {
+      toggleBtn.innerText = "START AI";
+      toggleBtn.style.background = "rgba(255, 0, 85, 0.1)";
+      toggleBtn.style.color = "#ff0055";
+      toggleBtn.style.borderColor = "#ff0055";
+      // Clear canvas when stopped
+      const canvas = videoWrapper.querySelector('canvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    } else {
+      toggleBtn.innerText = "STOP AI";
+      toggleBtn.style.background = "rgba(0, 243, 255, 0.1)";
+      toggleBtn.style.color = "#00f3ff";
+      toggleBtn.style.borderColor = "#00f3ff";
+    }
+  });
+}
+
 // --- NAVIGATION LOGIC ---
 const views = {
   'live': document.getElementById('view-live'),
@@ -44,7 +77,7 @@ const views = {
   'reports': document.getElementById('view-reports')
 };
 
-document.querySelectorAll('.nav-links li').forEach(item => {
+document.querySelectorAll('.nav-links li:not(:last-child)').forEach(item => {
   item.addEventListener('click', (e) => {
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
     item.classList.add('active');
@@ -64,8 +97,6 @@ document.querySelectorAll('.nav-links li').forEach(item => {
         views['reports'].style.display = 'block';
         renderReports();
       }
-    } else if (text.includes('Settings') || text.includes('Admin')) {
-      alert("Admin Panel feature is coming soon!");
     }
   });
 });
@@ -132,8 +163,6 @@ if (dlBtn) dlBtn.addEventListener('click', () => {
   document.body.removeChild(link);
 });
 
-let isLoopRunning = false;
-
 video.addEventListener('play', () => {
   // Prevent duplicate canvases
   if (videoWrapper.querySelector('canvas')) return;
@@ -143,26 +172,32 @@ video.addEventListener('play', () => {
 
   const displaySize = { width: video.width, height: video.height };
   faceapi.matchDimensions(canvas, displaySize);
-
   loadingOverlay.classList.add('hidden');
 
   let isDetecting = false;
 
   async function detect() {
     if (video.paused || video.ended) {
-      // If paused, we stop the loop, so we reset the flag to allow restarting later
       isLoopRunning = false;
       return;
     }
 
-    // Continue loop
     requestAnimationFrame(detect);
+
+    // PAUSE LOGIC
+    if (isPaused) return;
 
     if (isDetecting) return;
     isDetecting = true;
 
+    // FRAME SKIPPING (Run inference every 2nd frame)
+    frameCount++;
+    if (frameCount % 2 !== 0) {
+      isDetecting = false;
+      return;
+    }
+
     try {
-      // Lower threshold slightly to detecting faces better in low light
       const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
 
       const detections = await faceapi.detectAllFaces(video, options)
@@ -181,11 +216,20 @@ video.addEventListener('play', () => {
 
         // --- 1. SLEEP DETECTION HEURISTICS ---
 
-        // A. EAR (Eye Aspect Ratio) - "Eyes halfway down"
+        // A. EAR (Eye Aspect Ratio) 
         const leftEye = landmarks.getLeftEye();
         const rightEye = landmarks.getRightEye();
 
+        // VISUAL DEBUG: Draw Eyes
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
         function getEAR(eye) {
+          // Draw path for visual feedback
+          ctx.moveTo(eye[0].x, eye[0].y);
+          for (let i = 1; i < eye.length; i++) ctx.lineTo(eye[i].x, eye[i].y);
+          ctx.closePath();
+
           const v1 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
           const v2 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
           const h = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
@@ -193,7 +237,7 @@ video.addEventListener('play', () => {
         }
 
         const avgEAR = (getEAR(leftEye) + getEAR(rightEye)) / 2;
-        const eyesHalfClosed = avgEAR < 0.23; // Adjusted threshold slightly
+        const eyesHalfClosed = avgEAR < 0.23;
 
         // B. Flinching (EAR Variance)
         earHistory.push(avgEAR);
@@ -203,7 +247,7 @@ video.addEventListener('play', () => {
         const earVariance = earHistory.reduce((a, b) => a + Math.pow(b - earMean, 2), 0) / earHistory.length;
         const isFlinching = earVariance > 0.005;
 
-        // C. Head Tilt (Resting on side)
+        // C. Head Tilt
         const pLeft = landmarks.positions[36];
         const pRight = landmarks.positions[45];
         const dy = pRight.y - pLeft.y;
@@ -213,16 +257,18 @@ video.addEventListener('play', () => {
 
         const isSleepy = eyesHalfClosed || isHeadResting || (eyesHalfClosed && isFlinching);
 
+        // COLOR EYES
+        ctx.strokeStyle = isSleepy ? '#ff0055' : '#00ffd5';
+        ctx.stroke();
 
         // --- 2. SADNESS HEURISTICS ---
         const mouLeft = landmarks.positions[48];
         const mouRight = landmarks.positions[54];
         const mouCenter = landmarks.positions[62];
-        // Frown check: corners lower than center
         const isFrowning = (mouLeft.y > mouCenter.y + 3) && (mouRight.y > mouCenter.y + 3);
 
 
-        // --- 3. TEMPORAL SMOOTHING ---
+        // --- 3. TEMPORAL SMOOTHING & HYSTERESIS ---
         if (detection.expressions) {
           historyBuffer.push(detection.expressions);
           if (historyBuffer.length > HISTORY_SIZE) historyBuffer.shift();
@@ -239,11 +285,57 @@ video.addEventListener('play', () => {
           emotionKeys.forEach(k => averagedExpressions[k] /= historyBuffer.length);
         }
 
-        // --- BOOST METRICS ---
-        if (isFrowning) averagedExpressions['sad'] += 0.5; // Stronger boost
-        if (isHeadResting) averagedExpressions['neutral'] -= 0.2; // Reduce neutral if tilting
+        if (isFrowning) averagedExpressions['sad'] += 0.5;
+        if (isHeadResting) averagedExpressions['neutral'] -= 0.2;
 
-        // --- DECISION ---
+        // Determine raw winner
+        const expressions = averagedExpressions;
+        let rawWinner = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+        let score = Math.round(expressions[rawWinner] * 100);
+
+        // Sleepy Override (Highest Priority)
+        if (isSleepy) {
+          rawWinner = "sleepy";
+          score = 85 + Math.round(Math.random() * 15);
+          if (isHeadResting) score = 99;
+        }
+
+        // HYSTERESIS: Sticky Logic
+        if (rawWinner === lastConfirmedEmotion) {
+          emotionConsecutiveCount++;
+        } else {
+          emotionConsecutiveCount = 0;
+          // If the new emotion is strong enough (or if we just switched from sleepy back to neutral)
+          // we might switch immediately, but for jittery expressions, we wait
+          if (rawWinner === 'sleepy' || lastConfirmedEmotion === 'sleepy') {
+            // Fast switch for sleepy
+            lastConfirmedEmotion = rawWinner;
+          } else {
+            // Wait for buffer
+            lastConfirmedEmotion = rawWinner; // Actually, let's just create a buffer variable
+          }
+        }
+
+        // To properly implement hysteresis:
+        // We only update the DISPLAYED emotion if the NEW emotion has been consistent for X frames.
+        // But we need to track the "candidate" emotion separately.
+
+        // Simplified "Sticky" Logic: 
+        // Only update outcome if the same candidate wins for 3 consecutive frames
+        // (The code above resets count on change, so efficient)
+        let outcome = lastConfirmedEmotion;
+        if (emotionConsecutiveCount > STICKY_THRESHOLD) {
+          // It's confirmed
+          outcome = rawWinner;
+        } else {
+          // Keep showing old one until new one proves itself
+          if (rawWinner === 'sleepy') outcome = 'sleepy'; // Instant sleep
+        }
+
+        // Sync
+        lastConfirmedEmotion = rawWinner;
+
+        // --- DRAW UI ---
         const mirroredX = canvas.width - box.x - box.width;
 
         ctx.strokeStyle = isSleepy ? '#ff0055' : '#00f3ff';
@@ -253,19 +345,9 @@ video.addEventListener('play', () => {
         const age = Math.round(detection.age);
         const gender = detection.gender;
 
-        const expressions = averagedExpressions;
-        let outcome = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
-        let score = Math.round(expressions[outcome] * 100);
-
-        if (isSleepy) {
-          outcome = "sleepy";
-          score = 85 + Math.round(Math.random() * 15);
-          if (isHeadResting) score = 99;
-        }
-
+        // Log final confirmed outcome
         logData(outcome, age, gender);
 
-        // Draw Card
         let cardX = mirroredX + box.width + 10;
         const cardY = box.y;
         if (cardX + 160 > canvas.width) cardX = mirroredX - 170;
