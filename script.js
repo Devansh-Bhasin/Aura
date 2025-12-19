@@ -106,11 +106,10 @@ if (toggleBtn) {
       // 2. Stop Camera
       stopCamera();
 
-      // 3. Clear Canvas
+      // 3. Remove Canvas (so it gets recreated on restart)
       const canvas = videoWrapper.querySelector('canvas');
       if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.remove();
       }
 
     } else {
