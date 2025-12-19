@@ -16,11 +16,11 @@ const earHistory = [];
 
 // Load models
 Promise.all([
-  faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-  faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-  faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-  faceapi.nets.faceExpressionNet.loadFromUri('/models'),
-  faceapi.nets.ageGenderNet.loadFromUri('/models')
+  faceapi.nets.tinyFaceDetector.loadFromUri('./models'),
+  faceapi.nets.faceLandmark68Net.loadFromUri('./models'),
+  faceapi.nets.faceRecognitionNet.loadFromUri('./models'),
+  faceapi.nets.faceExpressionNet.loadFromUri('./models'),
+  faceapi.nets.ageGenderNet.loadFromUri('./models')
 ]).then(startVideo).catch(err => {
   console.error("Error loading models: ", err);
   loadingOverlay.innerHTML = `<p style="color:red">Error loading models.<br>Check console for details.</p>`;
