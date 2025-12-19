@@ -51,7 +51,15 @@
             <div id="view-live" class="view-section active">
                 <div class="feed-container glass-panel">
                     <div class="video-wrapper">
-                        <video id="video" width="720" height="560" autoplay muted></video>
+                        <video id="video" autoplay muted playsinline></video>
+                        <div id="thank-you-overlay" class="hidden"
+                            style="position: absolute; top:0; left:0; width:100%; height:100%; background: #0b0c15; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10;">
+                            <h1 style="font-size: 3rem; color: #00f3ff; text-shadow: 0 0 20px rgba(0,243,255,0.5);">Aura
+                                Offline</h1>
+                            <p style="color: #ccc; margin-top: 10px; font-size: 1.2rem;">"Rest your eyes, recharge your
+                                mind."</p>
+                            <p style="color: #666; margin-top: 40px; font-size: 0.9rem;">Click 'START AI' to resume.</p>
+                        </div>
                         <!-- Canvas will be appended here by script -->
                         <div class="loading-overlay" id="loading">
                             <div class="loader"></div>
