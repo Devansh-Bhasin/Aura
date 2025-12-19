@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Emotion AI</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="face-api.min.js"></script>
+    <script defer src="script.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation (Visual Only) -->
+        <nav class="sidebar glass-panel">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <span>EMOTION AI</span>
+            </div>
+            <ul class="nav-links">
+                <li class="active"><span class="icon">◉</span> Live Feed</li>
+                <li><span class="icon">II</span> Analytics</li>
+                <li><span class="icon">≡</span> Reports</li>
+                <li><span class="icon">⚙</span> Settings</li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-bar glass-panel">
+                <div class="status-indicator">
+                    <span class="dot pulse"></span> System Active
+                </div>
+                <!-- Admin Profile -->
+                <div class="user-profile" id="adminProfile" style="cursor: pointer;" title="Click to view details">
+                    <span>Admin</span>
+                    <div class="avatar" style="width: 35px; height: 35px; background: #bc13fe; border-radius: 50%;">
+                    </div>
+                </div>
+            </header>
+
+            <!-- Video Feed Section (Default View) -->
+            <div id="view-live" class="view-section active">
+                <div class="feed-container glass-panel">
+                    <div class="video-wrapper">
+                        <video id="video" width="720" height="560" autoplay muted></video>
+                        <!-- Canvas will be appended here by script -->
+                        <div class="loading-overlay" id="loading">
+                            <div class="loader"></div>
+                            <p>Loading AI Models...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics View (Hidden by default) -->
+            <div id="view-analytics" class="view-section glass-panel" style="display: none; padding: 30px;">
+                <h2>Session Analytics</h2>
+                <div style="margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap;" id="analytics-dashboard">
+                    <!-- Stats will be injected here -->
+                    <p>No data yet. Go to Live Feed to start tracking.</p>
+                </div>
+            </div>
+
+            <!-- Reports View (Hidden by default) -->
+            <div id="view-reports" class="view-section glass-panel"
+                style="display: none; padding: 30px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Session Logs</h2>
+                    <button id="downloadBtn"
+                        style="padding: 10px 20px; background: var(--neon-cyan); border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Download
+                        CSV</button>
+                </div>
+                <table style="width: 100%; margin-top: 20px; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                            <th style="padding: 10px;">Time</th>
+                            <th style="padding: 10px;">Emotion</th>
+                            <th style="padding: 10px;">Age</th>
+                            <th style="padding: 10px;">Gender</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body">
+                        <!-- Logs inject here -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

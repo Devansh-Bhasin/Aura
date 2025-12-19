@@ -79,7 +79,8 @@ body {
     gap: 10px;
 }
 
-.nav-links li.active, .nav-links li:hover {
+.nav-links li.active,
+.nav-links li:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-main);
 }
@@ -120,9 +121,17 @@ body {
 }
 
 @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(0, 243, 255, 0.7); }
-    70% { box-shadow: 0 0 0 10px rgba(0, 243, 255, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(0, 243, 255, 0); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 243, 255, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 243, 255, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 243, 255, 0);
+    }
 }
 
 /* Feed Container */
@@ -139,12 +148,14 @@ body {
     position: relative;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
 video {
-    display: block; /* Removes weird spacing */
-    transform: scaleX(-1); /* Mirror effect */
+    display: block;
+    /* Removes weird spacing */
+    transform: scaleX(-1);
+    /* Mirror effect */
 }
 
 canvas {
@@ -171,7 +182,7 @@ canvas {
 .loader {
     width: 40px;
     height: 40px;
-    border: 3px solid rgba(255,255,255,0.1);
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--neon-cyan);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -179,7 +190,9 @@ canvas {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading-overlay.hidden {
