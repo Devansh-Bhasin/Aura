@@ -81,16 +81,18 @@ function stopCamera() {
 // Audio State
 let isFunMode = false;
 const funAudioFiles = [
-  'audio/Voicy_Dhai kilo ka hath.mp3',
-  'audio/Voicy_Hey Ma Mataji.mp3',
-  'audio/Voicy_Padhaai Likhaai me dhyan do.mp3',
-  'audio/Voicy_khatam goodbye.mp3'
+  'audio/dhai_kilo.mp3',
+  'audio/hey_ma_mataji.mp3',
+  'audio/padhaai.mp3',
+  'audio/khatam_goodbye.mp3'
 ];
 const funAudios = []; // Preloaded audio objects
 
 // Preload Audio
 funAudioFiles.forEach(src => {
   const audio = new Audio(src);
+  audio.addEventListener('canplaythrough', () => console.log("Loaded:", src));
+  audio.addEventListener('error', (e) => console.error("Error loading:", src, e));
   funAudios.push(audio);
 });
 
@@ -99,7 +101,7 @@ const funModeToggle = document.getElementById('fun-mode-toggle');
 if (funModeToggle) {
   funModeToggle.addEventListener('change', (e) => {
     isFunMode = e.target.checked;
-    console.log("Fun Mode:", isFunMode);
+    console.log("Fun Mode Toggled:", isFunMode);
   });
 }
 
@@ -130,11 +132,14 @@ function handleAudioFeedback(outcome) {
     if (now - lastSpeechTime < SPEECH_COOLDOWN) return;
     lastSpeechTime = now;
 
+    console.log("Triggering Audio. Fun Mode:", isFunMode);
+
     if (isFunMode) {
       // Play Random Fun Audio
       const randomAudio = funAudios[Math.floor(Math.random() * funAudios.length)];
       randomAudio.currentTime = 0;
-      randomAudio.play().catch(e => console.log("Audio play failed:", e));
+      console.log("Playing:", randomAudio.src);
+      randomAudio.play().catch(e => console.error("Audio play failed:", e));
     } else {
       // Default Beep
       playBeep();
