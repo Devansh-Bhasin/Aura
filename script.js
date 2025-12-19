@@ -132,27 +132,46 @@ if (dlBtn) dlBtn.addEventListener('click', () => {
   document.body.removeChild(link);
 });
 
+let isLoopRunning = false;
+
 video.addEventListener('play', () => {
+  // Prevent duplicate canvases
+  if (videoWrapper.querySelector('canvas')) return;
+
   const canvas = faceapi.createCanvasFromMedia(video);
   videoWrapper.append(canvas);
 
   const displaySize = { width: video.width, height: video.height };
   faceapi.matchDimensions(canvas, displaySize);
+
   loadingOverlay.classList.add('hidden');
 
   let isDetecting = false;
 
   async function detect() {
-    if (video.paused || video.ended) return;
+    if (video.paused || video.ended) {
+      // If paused, we stop the loop, so we reset the flag to allow restarting later
+      isLoopRunning = false;
+      return;
+    }
+
+    // Continue loop
     requestAnimationFrame(detect);
 
     if (isDetecting) return;
     isDetecting = true;
 
     try {
-      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
-      const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceExpressions().withAgeAndGender();
+      // Lower threshold slightly to detecting faces better in low light
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+
+      const detections = await faceapi.detectAllFaces(video, options)
+        .withFaceLandmarks()
+        .withFaceExpressions()
+        .withAgeAndGender();
+
       const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -165,52 +184,42 @@ video.addEventListener('play', () => {
         // A. EAR (Eye Aspect Ratio) - "Eyes halfway down"
         const leftEye = landmarks.getLeftEye();
         const rightEye = landmarks.getRightEye();
+
         function getEAR(eye) {
           const v1 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
           const v2 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
           const h = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
           return (v1 + v2) / (2.0 * h);
         }
+
         const avgEAR = (getEAR(leftEye) + getEAR(rightEye)) / 2;
-        const eyesHalfClosed = avgEAR < 0.25;
+        const eyesHalfClosed = avgEAR < 0.23; // Adjusted threshold slightly
 
         // B. Flinching (EAR Variance)
         earHistory.push(avgEAR);
         if (earHistory.length > 20) earHistory.shift();
-        // Calculate Variance
+
         const earMean = earHistory.reduce((a, b) => a + b, 0) / earHistory.length;
         const earVariance = earHistory.reduce((a, b) => a + Math.pow(b - earMean, 2), 0) / earHistory.length;
-        const isFlinching = earVariance > 0.005; // Heuristic threshold for rapid blinking/twitching
+        const isFlinching = earVariance > 0.005;
 
         // C. Head Tilt (Resting on side)
-        // Angle between outer eye corners (Left: 0, Right: 3) of eye arrays?? No, landmarks 36 and 45.
-        const pLeft = landmarks.positions[36];  // Left eye outer
-        const pRight = landmarks.positions[45]; // Right eye outer
+        const pLeft = landmarks.positions[36];
+        const pRight = landmarks.positions[45];
         const dy = pRight.y - pLeft.y;
         const dx = pRight.x - pLeft.x;
-        const angleRad = Math.atan2(dy, dx);
-        const angleDeg = Math.abs(angleRad * (180 / Math.PI));
-        // Usually 0deg is level. >20 means head is resting on side.
+        const angleDeg = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
         const isHeadResting = angleDeg > 20;
-
-        // D. Head Back (Pitch) - Approximation
-        // Nose tip (30) to top of nose usually is fixed. 
-        // If nose tip moves UP relative to eyes, head is back.
-        // Simplified: is Nose Tip (30) higher (smaller Y) than usual vs eyes center?
-        // Let's rely on Tilt and Eyes for now as they are robust.
 
         const isSleepy = eyesHalfClosed || isHeadResting || (eyesHalfClosed && isFlinching);
 
 
         // --- 2. SADNESS HEURISTICS ---
-        // Check mouth corners (48, 54) vs mouth center top (62)
         const mouLeft = landmarks.positions[48];
         const mouRight = landmarks.positions[54];
         const mouCenter = landmarks.positions[62];
-        // If corners are lower than center, it's a frown? 
-        // Actually, in image coords, larger Y = lower. 
-        // So if mouLeft.y and mouRight.y are significantly LARGER than mouCenter.y + offset
-        const isFrowning = (mouLeft.y > mouCenter.y + 5) && (mouRight.y > mouCenter.y + 5);
+        // Frown check: corners lower than center
+        const isFrowning = (mouLeft.y > mouCenter.y + 3) && (mouRight.y > mouCenter.y + 3);
 
 
         // --- 3. TEMPORAL SMOOTHING ---
@@ -231,11 +240,12 @@ video.addEventListener('play', () => {
         }
 
         // --- BOOST METRICS ---
-        // If heuristics detect sad/sleepy, boost the score in the averaged object manually
-        if (isFrowning) averagedExpressions['sad'] += 0.4; // Strong boost for frown
+        if (isFrowning) averagedExpressions['sad'] += 0.5; // Stronger boost
+        if (isHeadResting) averagedExpressions['neutral'] -= 0.2; // Reduce neutral if tilting
 
         // --- DECISION ---
         const mirroredX = canvas.width - box.x - box.width;
+
         ctx.strokeStyle = isSleepy ? '#ff0055' : '#00f3ff';
         ctx.lineWidth = 3;
         ctx.strokeRect(mirroredX, box.y, box.width, box.height);
@@ -247,11 +257,10 @@ video.addEventListener('play', () => {
         let outcome = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
         let score = Math.round(expressions[outcome] * 100);
 
-        // Sleepy Override (Highest Priority)
         if (isSleepy) {
           outcome = "sleepy";
           score = 85 + Math.round(Math.random() * 15);
-          if (isHeadResting) score = 99; // Certainty
+          if (isHeadResting) score = 99;
         }
 
         logData(outcome, age, gender);
@@ -278,9 +287,6 @@ video.addEventListener('play', () => {
         ctx.fillStyle = '#cccccc';
         ctx.fillText(`Age: ${age}`, cardX + 15, cardY + 80);
         ctx.fillText(`Gender: ${gender}`, cardX + 15, cardY + 100);
-
-        // DEBUG: Show status
-        // ctx.fillText(`Tilt: ${Math.round(angleDeg)}  Frown: ${isFrowning}`, cardX, cardY - 10);
       });
     } catch (e) {
       console.error(e);
@@ -289,5 +295,8 @@ video.addEventListener('play', () => {
     }
   }
 
-  detect();
+  if (!isLoopRunning) {
+    isLoopRunning = true;
+    detect();
+  }
 });
