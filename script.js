@@ -78,6 +78,31 @@ function stopCamera() {
   }
 }
 
+// Audio State
+let isFunMode = false;
+const funAudioFiles = [
+  'audio/Voicy_Dhai kilo ka hath.mp3',
+  'audio/Voicy_Hey Ma Mataji.mp3',
+  'audio/Voicy_Padhaai Likhaai me dhyan do.mp3',
+  'audio/Voicy_khatam goodbye.mp3'
+];
+const funAudios = []; // Preloaded audio objects
+
+// Preload Audio
+funAudioFiles.forEach(src => {
+  const audio = new Audio(src);
+  funAudios.push(audio);
+});
+
+// Fun Mode Toggle
+const funModeToggle = document.getElementById('fun-mode-toggle');
+if (funModeToggle) {
+  funModeToggle.addEventListener('change', (e) => {
+    isFunMode = e.target.checked;
+    console.log("Fun Mode:", isFunMode);
+  });
+}
+
 // --- AUDIO LOGIC (BEEP) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep() {
@@ -104,7 +129,16 @@ function handleAudioFeedback(outcome) {
     const now = Date.now();
     if (now - lastSpeechTime < SPEECH_COOLDOWN) return;
     lastSpeechTime = now;
-    playBeep();
+
+    if (isFunMode) {
+      // Play Random Fun Audio
+      const randomAudio = funAudios[Math.floor(Math.random() * funAudios.length)];
+      randomAudio.currentTime = 0;
+      randomAudio.play().catch(e => console.log("Audio play failed:", e));
+    } else {
+      // Default Beep
+      playBeep();
+    }
   }
 }
 
@@ -222,11 +256,12 @@ video.addEventListener('play', () => {
 
         const isSleepy = eyesHalfClosed || isHeadResting || (eyesHalfClosed && isFlinching);
 
-        // 2. Sadness
+        // 2. Sadness (Refined)
         const mouLeft = landmarks.positions[48];
         const mouRight = landmarks.positions[54];
         const mouCenter = landmarks.positions[62];
-        const isFrowning = (mouLeft.y > mouCenter.y + 3) && (mouRight.y > mouCenter.y + 3);
+        // Frown calculation: corners slightly lower than center (More sensitive: +2)
+        const isFrowning = (mouLeft.y > mouCenter.y + 2) && (mouRight.y > mouCenter.y + 2);
 
         // 3. Smoothing
         if (detection.expressions) {
@@ -244,12 +279,18 @@ video.addEventListener('play', () => {
           emotionKeys.forEach(k => averagedExpressions[k] /= historyBuffer.length);
         }
 
-        if (isFrowning) averagedExpressions['sad'] += 0.5;
+        if (isFrowning) averagedExpressions['sad'] += 0.35; // Boost score if frowning
         if (isHeadResting) averagedExpressions['neutral'] -= 0.2;
 
         // Decision
         const expressions = averagedExpressions;
         let rawWinner = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+
+        // Tuning: Force Sad if it's significant but Neutral is winning
+        if (expressions['sad'] > 0.35 && rawWinner === 'neutral') {
+          rawWinner = 'sad';
+        }
+
         let score = Math.round(expressions[rawWinner] * 100);
 
         if (isSleepy) {
