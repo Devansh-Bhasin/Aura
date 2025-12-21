@@ -28,6 +28,11 @@ const HISTORY_SIZE = 15; // Increased for accuracy
 // EAR History
 const earHistory = [];
 
+// Age & Gender Smoothing
+const ageHistory = [];
+const genderHistory = [];
+const SMOOTHING_BUFFER = 30;
+
 console.log("AURA AI: Version 5 Loaded");
 
 // --- INITIALIZATION ---
@@ -280,7 +285,8 @@ video.addEventListener('play', () => {
         const angleDeg = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
         const isHeadResting = angleDeg > 20;
 
-        const isSleepy = eyesHalfClosed || isHeadResting || (eyesHalfClosed && isFlinching);
+        const isSleepy = eyesHalfClosed || (eyesHalfClosed && isFlinching);
+        // Removed isHeadResting (Head Tilt) as standalone trigger per user feedback
 
         // 2. Sadness (Refined)
         const mouLeft = landmarks.positions[48];
@@ -339,8 +345,22 @@ video.addEventListener('play', () => {
         let outcome = lastConfirmedEmotion;
         if (rawWinner === 'sleepy') outcome = 'sleepy';
 
+        // 4. Age/Gender Smoothing
+        ageHistory.push(detection.age);
+        if (ageHistory.length > SMOOTHING_BUFFER) ageHistory.shift();
+        const avgAge = Math.round(ageHistory.reduce((a, b) => a + b, 0) / ageHistory.length);
+
+        genderHistory.push(detection.gender);
+        if (genderHistory.length > SMOOTHING_BUFFER) genderHistory.shift();
+        // Simple majority vote
+        const genderCounts = genderHistory.reduce((acc, curr) => {
+          acc[curr] = (acc[curr] || 0) + 1;
+          return acc;
+        }, {});
+        const smoothedGender = Object.keys(genderCounts).reduce((a, b) => genderCounts[a] > genderCounts[b] ? a : b);
+
         handleAudioFeedback(outcome);
-        logData(outcome, Math.round(detection.age), detection.gender);
+        logData(outcome, avgAge, smoothedGender);
 
         // Draw Text / UI
         const mirroredX = canvas.width - box.x - box.width;
@@ -366,8 +386,8 @@ video.addEventListener('play', () => {
         ctx.fillText(`${Math.min(score, 99)}% Confidence`, cardX + 15, cardY + 50);
 
         ctx.fillStyle = '#cccccc';
-        ctx.fillText(`Age: ${Math.round(detection.age)}`, cardX + 15, cardY + 80);
-        ctx.fillText(`Gender: ${detection.gender}`, cardX + 15, cardY + 100);
+        ctx.fillText(`Age: ${avgAge}`, cardX + 15, cardY + 80);
+        ctx.fillText(`Gender: ${smoothedGender}`, cardX + 15, cardY + 100);
       });
 
     } catch (e) {
